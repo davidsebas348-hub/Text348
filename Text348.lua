@@ -1,86 +1,50 @@
-repeat task.wait() until game:IsLoaded()
-
-local Workspace = game:GetService("Workspace")
-
--- =========================
--- TOGGLE REAL
--- =========================
-if _G.TrapCleanerSystem then
-	
-	-- Apagar sistema
-	_G.TrapCleanerSystem.Enabled = false
-	
-	-- Desconectar eventos
-	for _, conn in pairs(_G.TrapCleanerSystem.Connections) do
-		conn:Disconnect()
-	end
-	
-	_G.TrapCleanerSystem = nil
-	
-	return
-end
-
--- =========================
--- CREAR SISTEMA
--- =========================
-_G.TrapCleanerSystem = {
-	Enabled = true,
-	Connections = {}
+--// TOGGLE GLOBAL
+getgenv().TrapCleaner = getgenv().TrapCleaner or {
+    Enabled = false
 }
 
--- Función para eliminar TouchInterest dentro de un HitBox
-local function cleanHitbox(hitbox)
-	for _, obj in ipairs(hitbox:GetChildren()) do
-		if obj:IsA("TouchTransmitter") or obj.Name == "TouchInterest" then
-			obj:Destroy()
-		end
-	end
+-- invertir estado
+getgenv().TrapCleaner.Enabled = not getgenv().TrapCleaner.Enabled
 
-	local conn = hitbox.ChildAdded:Connect(function(obj)
-		if not _G.TrapCleanerSystem or not _G.TrapCleanerSystem.Enabled then return end
-		
-		if obj:IsA("TouchTransmitter") or obj.Name == "TouchInterest" then
-			obj:Destroy()
-		end
-	end)
-	
-	table.insert(_G.TrapCleanerSystem.Connections, conn)
-end
 
--- Función para vigilar cada TrapModel
-local function monitorTrap(trap)
-	if not trap:IsA("Model") then return end
-	
-	local hitbox = trap:FindFirstChild("HitBox")
-	if hitbox and hitbox:IsA("Part") then
-		cleanHitbox(hitbox)
-	end
-	
-	local conn = trap.ChildAdded:Connect(function(child)
-		if not _G.TrapCleanerSystem or not _G.TrapCleanerSystem.Enabled then return end
-		
-		if child.Name == "HitBox" and child:IsA("Part") then
-			cleanHitbox(child)
-		end
-	end)
-	
-	table.insert(_G.TrapCleanerSystem.Connections, conn)
-end
+--// SERVICIOS
+local Workspace = game:GetService("Workspace")
 
--- Detectar cuando aparezca TrapModel
-local workspaceConn = Workspace.ChildAdded:Connect(function(obj)
-	if not _G.TrapCleanerSystem or not _G.TrapCleanerSystem.Enabled then return end
-	
-	if obj.Name == "TrapModel" and obj:IsA("Model") then
-		monitorTrap(obj)
-	end
-end)
+-- evitar duplicar conexión
+if not getgenv().TrapCleaner.Connection then
 
-table.insert(_G.TrapCleanerSystem.Connections, workspaceConn)
+    local function clearTrap(model)
+        if not getgenv().TrapCleaner.Enabled then return end
+        if not (model:IsA("Model") and model.Name == "TrapModel") then return end
 
--- Revisar si ya existen
-for _, obj in ipairs(Workspace:GetChildren()) do
-	if obj.Name == "TrapModel" and obj:IsA("Model") then
-		monitorTrap(obj)
-	end
+        for _, obj in ipairs(model:GetDescendants()) do
+            if obj:IsA("Part") then
+                obj:Destroy()
+            end
+        end
+
+    end
+
+    -- existentes
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        clearTrap(obj)
+    end
+
+    -- nuevos
+    getgenv().TrapCleaner.Connection = Workspace.DescendantAdded:Connect(function(obj)
+        if not getgenv().TrapCleaner.Enabled then return end
+
+        if obj:IsA("Model") and obj.Name == "TrapModel" then
+            task.wait(0.05)
+            clearTrap(obj)
+            return
+        end
+
+        if obj:IsA("Part") then
+            local model = obj:FindFirstAncestor("TrapModel")
+            if model then
+                obj:Destroy()
+            end
+        end
+    end)
 end
